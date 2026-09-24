@@ -1,2 +1,16 @@
-# Placeholder: services (e.g. PostgreSQL, backend, frontend) will be added later.
-services: {}
+services:
+  postgres:
+    image: postgres:16
+    container_name: whatsapp-intelligence-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: whatsapp_user
+      POSTGRES_PASSWORD: whatsapp_password
+      POSTGRES_DB: whatsapp_intelligence
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

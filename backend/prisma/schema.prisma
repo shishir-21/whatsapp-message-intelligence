@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  VOICE
+  DOCUMENT
+  STICKER
+  LOCATION
+  CONTACT
+  OTHER
+}
+
+// State of the AI pipeline for a message. Review state lives on Review.
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Classified by message intent, not topic.
+enum MessageCategory {
+  ROUTINE_UPDATE
+  INCIDENT
+  CHANGE_REQUEST
+  RESOURCE_UPDATE
+  QUESTION
+  IRRELEVANT
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// A message that never needed review has no Review row.
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  CORRECTED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Group {
+  id              String    @id @default(uuid())
+  whatsappGroupId String    @unique
+  name            String
+  // Either true or NULL (never false). The unique index then allows at most
+  // one selected group at the database level, since NULLs don't collide.
+  isSelected      Boolean?  @unique
+  selectedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  messages Message[]
+}
+
+// Raw WhatsApp data only. Nothing AI-generated is stored here.
+model Message {
+  id                String      @id @default(uuid())
+  // Idempotency key: redelivered WhatsApp events hit this unique constraint.
+  whatsappMessageId String      @unique
+  groupId           String
+  senderId          String
+  senderName        String?
+  content           String
+  messageType       MessageType @default(TEXT)
+  sentAt            DateTime
+
+  processingStatus    ProcessingStatus @default(PENDING)
+  processingAttempts  Int              @default(0)
+  lastProcessingError String?
+  lastAttemptAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group       Group        @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  analyses    AIAnalysis[]
+  finalResult FinalResult?
+
+  @@index([groupId, sentAt])
+  @@index([processingStatus, createdAt])
+}
+
+// One row per successful AI run. Never updated, so history is preserved.
+model AIAnalysis {
+  id              String          @id @default(uuid())
+  messageId       String
+  category        MessageCategory
+  confidence      Float
+  summary         String?
+  priority        Priority?
+  actionRequired  Boolean         @default(false)
+  requestedAction String?
+  people          String[]
+  deadline        DateTime?
+  entities        Json?
+  // Full validated model output, kept for audit and evaluation.
+  rawOutput       Json
+  model           String
+  promptVersion   String?
+  createdAt       DateTime        @default(now())
+
+  message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  review      Review?
+  finalResult FinalResult[]
+
+  @@index([messageId, createdAt])
+  @@index([category])
+}
+
+// Human review of a specific AI analysis.
+model Review {
+  id           String       @id @default(uuid())
+  aiAnalysisId String       @unique
+  status       ReviewStatus @default(PENDING)
+  reason       String
+  reviewerName String?
+  notes        String?
+  reviewedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  aiAnalysis  AIAnalysis   @relation(fields: [aiAnalysisId], references: [id], onDelete: Cascade)
+  finalResult FinalResult?
+
+  @@index([status, createdAt])
+}
+
+// The approved result for a message: copied from AI when auto-accepted
+// (reviewId is null), or written by a human through a Review.
+model FinalResult {
+  id              String          @id @default(uuid())
+  messageId       String          @unique
+  aiAnalysisId    String
+  reviewId        String?         @unique
+  category        MessageCategory
+  summary         String?
+  priority        Priority?
+  actionRequired  Boolean         @default(false)
+  requestedAction String?
+  people          String[]
+  deadline        DateTime?
+  entities        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  message    Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  aiAnalysis AIAnalysis @relation(fields: [aiAnalysisId], references: [id], onDelete: Cascade)
+  review     Review?    @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([aiAnalysisId])
+  @@index([category])
+}
