@@ -30,6 +30,30 @@ function serializeId(id: unknown): string | undefined {
   return typeof serialized === "string" && serialized ? serialized : undefined;
 }
 
+// WPPConnect 2.3.3 builds the message id as `msg.id._serialized`, which the
+// current WhatsApp Web build no longer defines, so raw.id arrives undefined.
+// The canonical id is msg.id.toString() (the "false_<chat>_<id>[_<author>]"
+// form _serialized used to return). Wrap WPPConnect's in-page serializer to
+// fill it in when missing. Idempotent; when raw.id is already present the
+// wrapper leaves it untouched.
+async function restoreMessageIds(client: Whatsapp): Promise<void> {
+  try {
+    await client.page.evaluate(`(() => {
+      const w = window.WAPI;
+      if (!w || w._messageIdPatched) return;
+      const original = w._serializeMessageObj;
+      w._serializeMessageObj = (msg) => {
+        const out = original(msg);
+        if (out && !out.id && msg && msg.id) out.id = msg.id.toString();
+        return out;
+      };
+      w._messageIdPatched = true;
+    })()`);
+  } catch (err) {
+    log(`failed to patch message id serialization: ${errorMessage(err)}`);
+  }
+}
+
 // Maps a raw WPPConnect message to IncomingMessage. Returns null for
 // messages that should be ignored: not from a group, sent by this account,
 // or missing the identifiers we need.
@@ -173,6 +197,7 @@ export function createWhatsAppClient(
           return;
         }
         wpp = client;
+        await restoreMessageIds(client);
         client.onMessage((raw) => {
           if (destroyed || ended) return;
           try {
