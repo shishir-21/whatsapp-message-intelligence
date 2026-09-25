@@ -1,22 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { STATUS_LABELS, type ProcessingStatus } from "@/lib/messageTypes";
 
 interface Props {
-  statuses: readonly ProcessingStatus[];
-  selected: ProcessingStatus;
-  onSelect: (status: ProcessingStatus) => void;
+  title?: string;
+  statuses?: readonly ProcessingStatus[];
+  selected?: ProcessingStatus;
+  onSelect?: (status: ProcessingStatus) => void;
+  footer?: ReactNode;
 }
 
 // Collapsible left navigation; the processing status is the primary filter.
-export default function StatusSidebar({ statuses, selected, onSelect }: Props) {
+export default function StatusSidebar({ title = "Status", statuses = [], selected, onSelect, footer }: Props) {
   const [open, setOpen] = useState(true);
 
   return (
     <nav
-      aria-label="Message status"
-      className={`shrink-0 border-b border-zinc-200 dark:border-zinc-800 sm:border-b-0 sm:border-r ${
+      aria-label={title}
+      className={`flex shrink-0 flex-col sm:sticky sm:top-0 sm:h-screen sm:self-start sm:overflow-y-auto border-b border-zinc-200 dark:border-zinc-800 sm:border-b-0 sm:border-r ${
         open ? "sm:w-56" : "sm:w-14"
       }`}
     >
@@ -32,7 +34,7 @@ export default function StatusSidebar({ statuses, selected, onSelect }: Props) {
             <path d="M3 5h14M3 10h14M3 15h14" />
           </svg>
         </button>
-        {open && <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Status</span>}
+        {open && <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{title}</span>}
       </div>
       {open && (
         <ul className="flex gap-1 overflow-x-auto px-2 pb-2 sm:flex-col sm:px-3 sm:pb-3">
@@ -40,7 +42,7 @@ export default function StatusSidebar({ statuses, selected, onSelect }: Props) {
             <li key={status}>
               <button
                 type="button"
-                onClick={() => onSelect(status)}
+                onClick={() => onSelect?.(status)}
                 aria-current={selected === status ? "page" : undefined}
                 className={`w-full whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium ${
                   selected === status
@@ -54,6 +56,7 @@ export default function StatusSidebar({ statuses, selected, onSelect }: Props) {
           ))}
         </ul>
       )}
+      {open && footer}
     </nav>
   );
 }

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import MessageHistoryCard from "@/components/messages/MessageHistoryCard";
 import { getMessages } from "@/lib/api";
 import StatusSidebar from "@/components/messages/StatusSidebar";
+import { useWhatsAppControls } from "@/components/whatsapp/WhatsAppContext";
+import WhatsAppPanel from "@/components/whatsapp/WhatsAppPanel";
 import {
   CATEGORY_FILTERS,
   CATEGORY_FILTER_LABELS,
@@ -18,6 +20,9 @@ import {
 type LoadState = "loading" | "error" | "ready";
 
 export default function MessagesPage() {
+  // The gate remounts this page when the selected group changes, so state and
+  // fetches always belong to the current group.
+  const groupId = useWhatsAppControls()?.group.id;
   const [status, setStatus] = useState<ProcessingStatus>("PENDING");
   const [category, setCategory] = useState<CategoryFilter>("ALL");
   const [messages, setMessages] = useState<HistoryMessage[]>([]);
@@ -44,7 +49,7 @@ export default function MessagesPage() {
     setAttempt((n) => n + 1);
   }
 
-  const load = useCallback(() => getMessages(status, category), [status, category]);
+  const load = useCallback(() => getMessages(status, category, groupId), [status, category, groupId]);
 
   useEffect(() => {
     // Ignore the response of a superseded request (fast filter switching).
@@ -65,7 +70,7 @@ export default function MessagesPage() {
 
   return (
     <div className="flex flex-1 flex-col sm:flex-row">
-      <StatusSidebar statuses={STATUSES} selected={status} onSelect={selectStatus} />
+      <StatusSidebar statuses={STATUSES} selected={status} onSelect={selectStatus} footer={<WhatsAppPanel />} />
       <main className="mx-auto w-full min-w-0 max-w-4xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>

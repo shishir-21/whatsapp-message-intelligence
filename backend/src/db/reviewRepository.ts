@@ -27,9 +27,13 @@ export interface ReviewResolution {
   final: FinalResultValues;
 }
 
-export function findPending(): Promise<ReviewWithContext[]> {
+// groupId (Group.id) limits the list to reviews of that group's messages.
+export function findPending(groupId?: string): Promise<ReviewWithContext[]> {
   return prisma.review.findMany({
-    where: { status: "PENDING" },
+    where: {
+      status: "PENDING",
+      ...(groupId ? { aiAnalysis: { message: { groupId } } } : {}),
+    },
     include: withContext,
     orderBy: { createdAt: "asc" },
   });

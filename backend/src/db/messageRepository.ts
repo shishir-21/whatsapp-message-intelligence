@@ -96,6 +96,8 @@ export type MessageWithHistory = Prisma.MessageGetPayload<{ include: typeof hist
 export async function findHistory(query: {
   status?: ProcessingStatus;
   category?: MessageCategory;
+  // Only messages of this group (Group.id) when set.
+  groupId?: string;
   limit: number;
 }): Promise<MessageWithHistory[]> {
   let idFilter: Prisma.MessageWhereInput | undefined;
@@ -113,12 +115,14 @@ export async function findHistory(query: {
         LIMIT 1
       ) latest ON TRUE
       WHERE COALESCE(f."category", latest."category") = ${query.category}::"MessageCategory"
+        AND (${query.groupId ?? null}::text IS NULL OR m."groupId" = ${query.groupId ?? null}::text)
     `;
     idFilter = { id: { in: rows.map((r) => r.id) } };
   }
   return prisma.message.findMany({
     where: {
       ...(query.status ? { processingStatus: query.status } : {}),
+      ...(query.groupId ? { groupId: query.groupId } : {}),
       ...idFilter,
     },
     include: historyInclude,

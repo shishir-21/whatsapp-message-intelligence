@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import ReviewCard from "@/components/reviews/ReviewCard";
+import { useWhatsAppControls } from "@/components/whatsapp/WhatsAppContext";
 import { approveReview, correctReview, getReviews } from "@/lib/api";
 import type { CorrectionPayload, Review } from "@/lib/reviewTypes";
 
 type LoadState = "loading" | "error" | "ready";
 
 export default function ReviewsPage() {
+  const groupId = useWhatsAppControls()?.group.id;
   const [reviews, setReviews] = useState<Review[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [notice, setNotice] = useState<string | null>(null);
@@ -16,17 +18,17 @@ export default function ReviewsPage() {
   const load = useCallback(async () => {
     setState("loading");
     try {
-      setReviews(await getReviews());
+      setReviews(await getReviews(groupId));
       setState("ready");
     } catch {
       setState("error");
     }
-  }, []);
+  }, [groupId]);
 
   useEffect(() => {
     // Initial fetch. State starts as "loading", so no synchronous setState here.
     let cancelled = false;
-    getReviews()
+    getReviews(groupId)
       .then((data) => {
         if (cancelled) return;
         setReviews(data);
@@ -38,7 +40,7 @@ export default function ReviewsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [groupId]);
 
   async function handleApprove(id: string) {
     await approveReview(id);

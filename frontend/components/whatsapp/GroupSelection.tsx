@@ -6,11 +6,14 @@ import type { SelectedGroup, WhatsAppGroup } from "@/lib/whatsappTypes";
 
 interface Props {
   onSelected: (group: SelectedGroup) => void;
+  // When changing an existing selection: preselect it and allow cancelling.
+  current?: SelectedGroup;
+  onCancel?: () => void;
 }
 
-export default function GroupSelection({ onSelected }: Props) {
+export default function GroupSelection({ onSelected, current, onCancel }: Props) {
   const [groups, setGroups] = useState<WhatsAppGroup[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(current?.id ?? null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -44,8 +47,8 @@ export default function GroupSelection({ onSelected }: Props) {
     }
   }
 
-  return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center gap-5 px-4 py-12 sm:px-6">
+  const content = (
+    <div className="mx-auto flex w-full max-w-lg flex-col justify-center gap-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           Select a WhatsApp Group
@@ -106,6 +109,33 @@ export default function GroupSelection({ onSelected }: Props) {
       >
         {saving ? "Saving..." : "Continue"}
       </button>
-    </main>
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-md border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          Cancel
+        </button>
+      )}
+    </div>
   );
+
+  if (onCancel) {
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Change group"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      >
+        <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  return <main className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6">{content}</main>;
 }

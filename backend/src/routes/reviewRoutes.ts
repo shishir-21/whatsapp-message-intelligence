@@ -23,9 +23,10 @@ function sendError(res: Response, err: unknown): void {
 export function createReviewRouter(service: ReviewService): Router {
   const router = Router();
 
-  router.get("/", async (_req, res) => {
+  // Optional ?groupId=<Group.id> limits the list to that group's messages.
+  router.get("/", async (req, res) => {
     try {
-      const reviews = await service.listPending();
+      const reviews = await service.listPending(typeof req.query.groupId === "string" && req.query.groupId ? req.query.groupId : undefined);
       res.json({ reviews: reviews.map(toReviewView) });
     } catch (err) {
       sendError(res, err);

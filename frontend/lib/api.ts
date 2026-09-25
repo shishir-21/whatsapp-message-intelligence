@@ -53,17 +53,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function getReviews(): Promise<Review[]> {
-  const data = await request<ReviewsResponse>("/api/reviews");
+export async function getReviews(groupId?: string): Promise<Review[]> {
+  const data = await request<ReviewsResponse>(groupId ? `/api/reviews?${new URLSearchParams({ groupId })}` : "/api/reviews");
   return data.reviews;
 }
 
 export async function getMessages(
   status: ProcessingStatus,
   category: CategoryFilter = "ALL",
+  groupId?: string,
 ): Promise<HistoryMessage[]> {
   const params = new URLSearchParams({ status });
   if (category !== "ALL") params.set("category", category);
+  if (groupId) params.set("groupId", groupId);
   const data = await request<MessagesResponse>(`/api/messages?${params}`);
   return data.messages;
 }
@@ -120,4 +122,8 @@ export async function selectWhatsAppGroup(groupId: string): Promise<SelectedGrou
     body: JSON.stringify({ groupId }),
   });
   return data.group;
+}
+
+export function logoutWhatsApp(): Promise<WhatsAppStatusResponse> {
+  return request<WhatsAppStatusResponse>("/api/whatsapp/logout", { method: "POST" });
 }

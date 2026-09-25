@@ -43,6 +43,18 @@ export function createWhatsAppRouter(service: WhatsAppService): Router {
     res.json({ qr: service.getQrCode() });
   });
 
+  // Unlinks the device, closes the client and deselects the group. Stored
+  // messages are untouched.
+  router.post("/logout", async (_req, res) => {
+    try {
+      await service.logout();
+      await service.clearSelectedGroup();
+      res.json(publicStatus());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   router.get("/groups", async (_req, res) => {
     try {
       res.json({ groups: await service.listGroups() });

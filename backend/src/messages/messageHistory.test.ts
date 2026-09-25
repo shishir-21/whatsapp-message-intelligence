@@ -60,13 +60,14 @@ function resolvedCategory(m: MessageWithHistory): string | undefined {
 }
 
 function fakeStore(messages: MessageWithHistory[]) {
-  const calls: { status?: string; category?: string; limit: number }[] = [];
+  const calls: { status?: string; category?: string; groupId?: string; limit: number }[] = [];
   const store: MessageHistoryStore = {
     findHistory: async (query) => {
       calls.push(query);
       return messages
         .filter((m) => !query.status || m.processingStatus === query.status)
         .filter((m) => !query.category || resolvedCategory(m) === query.category)
+        .filter((m) => !query.groupId || m.groupId === query.groupId)
         .slice(0, query.limit);
     },
   };
@@ -275,5 +276,42 @@ describe("GET /api/messages status/category filters", () => {
     });
     assert.deepEqual(ids((await get([m], "?category=INCIDENT")).body), ["m1"]);
     assert.deepEqual(ids((await get([m], "?category=QUESTION")).body), []);
+  });
+});
+
+describe("GET /api/messages group scoping", () => {
+  const ids = (body: { messages: { id: string }[] }) => body.messages.map((m) => m.id);
+  const analysisFor = (category: string) => [analysis("a", T0, category)];
+  const scoped = [
+    message("e1", { groupId: "eng", processingStatus: "COMPLETED", analyses: analysisFor("INCIDENT") }),
+    message("e2", { groupId: "eng", processingStatus: "PENDING" }),
+    message("j1", { groupId: "job", processingStatus: "COMPLETED", analyses: analysisFor("INCIDENT") }),
+    message("j2", { groupId: "job", processingStatus: "COMPLETED", analyses: analysisFor("QUESTION") }),
+  ];
+
+  it("returns only messages of the requested group", async () => {
+    const { body, calls } = await get(scoped, "?groupId=job");
+    assert.deepEqual(ids(body), ["j1", "j2"]);
+    assert.equal(calls[0].groupId, "job");
+  });
+
+  it("excludes messages from other groups", async () => {
+    const { body } = await get(scoped, "?groupId=eng");
+    assert.deepEqual(ids(body), ["e1", "e2"]);
+  });
+
+  it("combines status, category and group", async () => {
+    const { body } = await get(scoped, "?status=COMPLETED&category=INCIDENT&groupId=job");
+    assert.deepEqual(ids(body), ["j1"]);
+  });
+
+  it("returns an empty list for a group with no messages", async () => {
+    const { status, body } = await get(scoped, "?status=COMPLETED&groupId=empty");
+    assert.equal(status, 200);
+    assert.deepEqual(body.messages, []);
+  });
+
+  it("rejects an empty groupId", async () => {
+    assert.equal((await get(scoped, "?groupId=")).status, 400);
   });
 });

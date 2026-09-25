@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { Group } from "@prisma/client";
-import { getSelectedGroup, selectGroup } from "../db/groupRepository";
+import { clearSelectedGroup, getSelectedGroup, selectGroup } from "../db/groupRepository";
 import type { IncomingMessage } from "../messages/types";
 import {
   WhatsAppStatus,
@@ -143,6 +143,10 @@ export class WhatsAppService extends EventEmitter {
     const group = groups.find((g) => g.id === groupId);
     if (!group) throw new GroupNotFoundError(groupId);
     return selectGroup(group.id, group.name);
+  }
+
+  clearSelectedGroup(): Promise<void> {
+    return clearSelectedGroup();
   }
 
   getSelectedGroup(): Promise<Group | null> {

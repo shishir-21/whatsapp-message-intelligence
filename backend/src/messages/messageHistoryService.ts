@@ -11,6 +11,8 @@ export const historyQuerySchema = z.object({
   // Optional; matches the message's resolved category (final result first,
   // otherwise the latest AI analysis).
   category: z.enum(Object.values(CATEGORY_TO_DB) as [MessageCategory, ...MessageCategory[]]).optional(),
+  // Group.id of the group whose messages to show (the selected group).
+  groupId: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_HISTORY_LIMIT).default(DEFAULT_HISTORY_LIMIT),
 });
 
@@ -22,6 +24,7 @@ export interface MessageHistoryStore {
     // Resolved category: FinalResult.category if present, otherwise the
     // latest AIAnalysis.category.
     category?: MessageCategory;
+    groupId?: string;
     limit: number;
   }): Promise<MessageWithHistory[]>;
 }
@@ -31,7 +34,12 @@ export class MessageHistoryService {
 
   async list(query: HistoryQuery): Promise<MessageHistoryView[]> {
     const status = query.status === "ALL" ? undefined : query.status;
-    const messages = await this.store.findHistory({ status, category: query.category, limit: query.limit });
+    const messages = await this.store.findHistory({
+      status,
+      category: query.category,
+      ...(query.groupId ? { groupId: query.groupId } : {}),
+      limit: query.limit,
+    });
     return messages.map(toMessageHistoryView);
   }
 }

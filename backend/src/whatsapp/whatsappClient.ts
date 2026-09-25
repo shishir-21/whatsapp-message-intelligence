@@ -41,6 +41,10 @@ async function launchBrowser(config: WhatsAppClientConfig): Promise<Browser> {
 
 const log = (message: string) => console.log(`[whatsapp:wpp] ${message}`);
 
+// client.close() can hang once the page has navigated away (e.g. after a
+// logout); give up after this long and close the browser directly.
+const CLOSE_TIMEOUT_MS = 5000;
+
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -267,7 +271,11 @@ export function createWhatsAppClient(
       wpp = undefined;
       if (client) {
         try {
-          await client.close();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const timeout = new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, CLOSE_TIMEOUT_MS);
+          });
+          await Promise.race([client.close(), timeout]).finally(() => clearTimeout(timer));
         } catch (err) {
           log(`error while closing: ${errorMessage(err)}`);
         }

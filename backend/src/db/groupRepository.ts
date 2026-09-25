@@ -22,3 +22,12 @@ export function selectGroup(whatsappGroupId: string, name: string): Promise<Grou
     });
   });
 }
+
+// Deselects the current group. The group row and its messages are kept, so
+// history stays intact and re-selecting the group later reuses the same row.
+export async function clearSelectedGroup(): Promise<void> {
+  await prisma.group.updateMany({
+    where: { isSelected: true },
+    data: { isSelected: null, selectedAt: null },
+  });
+}

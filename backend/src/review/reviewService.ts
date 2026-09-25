@@ -17,7 +17,7 @@ export class ReviewConflictError extends Error {
 }
 
 export interface ReviewStore {
-  findPending(): Promise<ReviewWithContext[]>;
+  findPending(groupId?: string): Promise<ReviewWithContext[]>;
   findById(id: string): Promise<ReviewWithContext | null>;
   resolveReview(id: string, resolution: ReviewResolution): Promise<boolean>;
 }
@@ -25,8 +25,8 @@ export interface ReviewStore {
 export class ReviewService {
   constructor(private readonly store: ReviewStore) {}
 
-  listPending(): Promise<ReviewWithContext[]> {
-    return this.store.findPending();
+  listPending(groupId?: string): Promise<ReviewWithContext[]> {
+    return this.store.findPending(groupId);
   }
 
   async get(id: string): Promise<ReviewWithContext> {

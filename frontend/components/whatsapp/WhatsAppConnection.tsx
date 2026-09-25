@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { connectWhatsApp, getSelectedGroup, getWhatsAppStatus } from "@/lib/api";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { connectWhatsApp, getSelectedGroup, getWhatsAppStatus, logoutWhatsApp } from "@/lib/api";
 import type { SelectedGroup, WhatsAppStatusResponse } from "@/lib/whatsappTypes";
+import StatusSidebar from "@/components/messages/StatusSidebar";
 import GroupSelection from "./GroupSelection";
+import LogoutDialog from "./LogoutDialog";
 import QrModal from "./QrModal";
+import { WhatsAppContext, type WhatsAppControls } from "./WhatsAppContext";
 
 // Fast while a connection is in progress, slow once connected (only to notice
 // a later disconnect).
@@ -94,6 +97,42 @@ export default function WhatsAppConnection({ children }: { children: ReactNode }
 
   const closeModal = useCallback(() => setModalOpen(false), []);
 
+  const [changingGroup, setChangingGroup] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutFailed, setLogoutFailed] = useState(false);
+
+  const confirmLogout = useCallback(async () => {
+    setLoggingOut(true);
+    setLogoutFailed(false);
+    try {
+      const next = await logoutWhatsApp();
+      // Back to the disconnected state; the next poll keeps it in sync.
+      setStatus(next);
+      setWasReady(false);
+      setGroup(undefined);
+      setLogoutOpen(false);
+    } catch {
+      setLogoutFailed(true);
+    }
+    setLoggingOut(false);
+  }, []);
+
+  const controls = useMemo<WhatsAppControls | null>(
+    () =>
+      group
+        ? {
+            group,
+            changeGroup: () => setChangingGroup(true),
+            logout: () => {
+              setLogoutFailed(false);
+              setLogoutOpen(true);
+            },
+          }
+        : null,
+    [group],
+  );
+
   if (status === null) {
     return (
       <CenteredCard>
@@ -108,10 +147,19 @@ export default function WhatsAppConnection({ children }: { children: ReactNode }
     <QrModal status={status} requestFailed={requestFailed} onClose={closeModal} onRetry={startConnect} />
   ) : null;
 
+  // Sidebar plus content, shown until WhatsApp is connected and a group chosen.
+  const shell = (title: string, content: ReactNode) => (
+    <div className="flex flex-1 flex-col sm:flex-row">
+      <StatusSidebar title={title} />
+      <div className="flex min-w-0 flex-1 flex-col">{content}</div>
+      {modal}
+    </div>
+  );
+
   if (ready) {
-    let content: ReactNode;
     if (groupCheckFailed) {
-      content = (
+      return shell(
+        "WhatsApp",
         <CenteredCard>
           <p className="text-sm text-zinc-700 dark:text-zinc-300">Unable to load your settings.</p>
           <button
@@ -124,24 +172,43 @@ export default function WhatsAppConnection({ children }: { children: ReactNode }
           >
             Try Again
           </button>
-        </CenteredCard>
+        </CenteredCard>,
       );
-    } else if (group === undefined) {
-      content = (
+    }
+    if (group === undefined) {
+      return shell(
+        "WhatsApp",
         <CenteredCard>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading...</p>
-        </CenteredCard>
+        </CenteredCard>,
       );
-    } else if (group === null) {
-      content = <GroupSelection onSelected={setGroup} />;
-    } else {
-      content = children;
+    }
+    if (group === null) {
+      return shell("WhatsApp", <GroupSelection onSelected={setGroup} />);
     }
     return (
-      <>
-        {content}
+      <WhatsAppContext.Provider value={controls}>
+        <Fragment key={group.id}>{children}</Fragment>
+        {changingGroup && (
+          <GroupSelection
+            current={group}
+            onCancel={() => setChangingGroup(false)}
+            onSelected={(g) => {
+              setGroup(g);
+              setChangingGroup(false);
+            }}
+          />
+        )}
+        {logoutOpen && (
+          <LogoutDialog
+            busy={loggingOut}
+            failed={logoutFailed}
+            onCancel={() => setLogoutOpen(false)}
+            onConfirm={confirmLogout}
+          />
+        )}
         {modal}
-      </>
+      </WhatsAppContext.Provider>
     );
   }
 
@@ -196,10 +263,6 @@ export default function WhatsAppConnection({ children }: { children: ReactNode }
     );
   }
 
-  return (
-    <>
-      <CenteredCard>{card}</CenteredCard>
-      {modal}
-    </>
-  );
+
+  return shell("Connect", <CenteredCard>{card}</CenteredCard>);
 }
