@@ -1,4 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
 import { create, type Message, type Whatsapp } from "@wppconnect-team/wppconnect";
+import { puppeteerConfig } from "@wppconnect-team/wppconnect/dist/config/puppeteer.config";
+import puppeteer, { type Browser } from "puppeteer";
 import type { IncomingMessage } from "../messages/types";
 import type { WhatsAppClientHandle, WhatsAppEventHandlers, WhatsAppGroup } from "./types";
 
@@ -16,6 +20,23 @@ export function loadWhatsAppClientConfig(env: NodeJS.ProcessEnv = process.env): 
     sessionPath: env.WHATSAPP_SESSION_PATH || "./tokens",
     headless: env.WHATSAPP_HEADLESS !== "false",
   };
+}
+
+// We launch Chromium ourselves and hand it to WPPConnect (create({ browser })).
+// WPPConnect's own launcher always enables puppeteer-extra-plugin-stealth, whose
+// user-agent-override evasion breaks the current WhatsApp Web build: the page
+// loads but WPP.isReady never becomes true, so wapi.js injection times out after
+// 30s. Owning the browser also gives us a handle to close it when create()
+// rejects, which WPPConnect does not do itself.
+async function launchBrowser(config: WhatsAppClientConfig): Promise<Browser> {
+  // Same profile directory WPPConnect would use, so existing sessions carry over.
+  const userDataDir = path.resolve(process.cwd(), config.sessionPath, config.clientId);
+  fs.mkdirSync(userDataDir, { recursive: true });
+  return puppeteer.launch({
+    headless: config.headless,
+    userDataDir,
+    args: [...puppeteerConfig.chromiumArgs],
+  });
 }
 
 const log = (message: string) => console.log(`[whatsapp:wpp] ${message}`);
@@ -96,6 +117,7 @@ export function createWhatsAppClient(
   handlers: WhatsAppEventHandlers,
 ): WhatsAppClientHandle {
   let wpp: Whatsapp | undefined;
+  let browser: Browser | undefined;
   let destroyed = false;
   // Each of these is reported to the handlers at most once.
   let authenticated = false;
@@ -125,14 +147,31 @@ export function createWhatsAppClient(
     else handlers.onDisconnected(reason);
   };
 
+  const closeBrowser = async () => {
+    const b = browser;
+    browser = undefined;
+    if (!b) return;
+    try {
+      await b.close();
+    } catch (err) {
+      log(`error while closing browser: ${errorMessage(err)}`);
+    }
+  };
+
   return {
     async initialize() {
       try {
+        browser = await launchBrowser(config);
+        if (destroyed) {
+          await closeBrowser();
+          return;
+        }
         const client = await create({
           session: config.clientId,
           // Persistent session storage, separate from the POC's tokens-poc.
           folderNameToken: config.sessionPath,
-          // Use Puppeteer's own browser instead of a system-installed Chrome.
+          // Our own Puppeteer browser (see launchBrowser).
+          browser,
           useChrome: false,
           headless: config.headless,
           // Keep the session open while waiting for a QR scan; the default
@@ -210,6 +249,9 @@ export function createWhatsAppClient(
         // create() only resolves once logged in.
         markReady();
       } catch (err) {
+        // create() leaves the browser running when it rejects; close it so a
+        // failed start doesn't leak Chromium or keep the profile locked.
+        await closeBrowser();
         // A rejection caused by our own destroy() is expected, not a failure.
         if (destroyed) return;
         throw err;
@@ -223,12 +265,15 @@ export function createWhatsAppClient(
       destroyed = true;
       const client = wpp;
       wpp = undefined;
-      if (!client) return;
-      try {
-        await client.close();
-      } catch (err) {
-        log(`error while closing: ${errorMessage(err)}`);
+      if (client) {
+        try {
+          await client.close();
+        } catch (err) {
+          log(`error while closing: ${errorMessage(err)}`);
+        }
       }
+      // Also covers destroy() while create() is still pending (no client yet).
+      await closeBrowser();
     },
 
     // Unlinks this device from the account; a new QR scan is needed next
