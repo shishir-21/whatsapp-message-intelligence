@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { HistoryMessage, ProcessingStatus, ResultFields } from "@/lib/messageTypes";
-import { categoryLabel, priorityLabel, toStringList } from "@/lib/reviewForm";
+import PriorityBadge from "@/components/PriorityBadge";
+import { categoryLabel, toStringList } from "@/lib/reviewForm";
 
 const STATUS_STYLES: Record<ProcessingStatus, string> = {
   PENDING: "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200",
@@ -39,7 +40,7 @@ function ResultRows({ result }: { result: ResultFields }) {
     <dl className="space-y-1.5">
       <Row label="Category">{categoryLabel(result.category)}</Row>
       <Row label="Summary">{result.summary ?? "—"}</Row>
-      <Row label="Priority">{priorityLabel(result.priority)}</Row>
+      <Row label="Priority"><PriorityBadge priority={result.priority} /></Row>
       <Row label="Action required">{result.actionRequired ? "Yes" : "No"}</Row>
       <Row label="Requested action">{result.requestedAction ?? "—"}</Row>
       <Row label="People">{list(result.people)}</Row>
@@ -121,7 +122,7 @@ export default function MessageHistoryCard({ message }: { message: HistoryMessag
           <>
             <p className="text-sm text-zinc-900 dark:text-zinc-100">
               {categoryLabel(ai.category)} · {Math.round(ai.confidence * 100)}% ·{" "}
-              {ai.priority ? `${titleCase(ai.priority)} priority` : "No priority"}
+              {ai.priority ? <PriorityBadge priority={ai.priority} /> : "No priority"}
             </p>
             {ai.summary && (
               <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">{ai.summary}</p>
@@ -141,7 +142,12 @@ export default function MessageHistoryCard({ message }: { message: HistoryMessag
         {final ? (
           <p className="text-sm text-zinc-900 dark:text-zinc-100">
             {categoryLabel(final.category)}
-            {final.priority ? ` · ${titleCase(final.priority)} priority` : ""}
+            {final.priority && (
+              <>
+                {" · "}
+                <PriorityBadge priority={final.priority} />
+              </>
+            )}
             {review?.status === "CORRECTED"
               ? " · corrected by a human"
               : review?.status === "APPROVED"

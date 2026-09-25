@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { Message, MessageType, ProcessingStatus } from "@prisma/client";
+import type { Message, MessageCategory, MessageType, ProcessingStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 
 export interface NewMessage {
@@ -90,12 +90,37 @@ const historyInclude = {
 export type MessageWithHistory = Prisma.MessageGetPayload<{ include: typeof historyInclude }>;
 
 // Newest messages first. `status` undefined means every processing status.
-export function findHistory(query: {
+// `category` filters on the resolved category: FinalResult.category when a
+// final result exists, otherwise the category of the latest AIAnalysis.
+// Messages with neither never match a category.
+export async function findHistory(query: {
   status?: ProcessingStatus;
+  category?: MessageCategory;
   limit: number;
 }): Promise<MessageWithHistory[]> {
+  let idFilter: Prisma.MessageWhereInput | undefined;
+  if (query.category) {
+    // "Latest analysis" cannot be expressed in a Prisma where clause, so the
+    // matching ids are resolved in SQL and the rows are then loaded normally.
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT m."id"
+      FROM "Message" m
+      LEFT JOIN "FinalResult" f ON f."messageId" = m."id"
+      LEFT JOIN LATERAL (
+        SELECT a."category" FROM "AIAnalysis" a
+        WHERE a."messageId" = m."id"
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) latest ON TRUE
+      WHERE COALESCE(f."category", latest."category") = ${query.category}::"MessageCategory"
+    `;
+    idFilter = { id: { in: rows.map((r) => r.id) } };
+  }
   return prisma.message.findMany({
-    where: query.status ? { processingStatus: query.status } : undefined,
+    where: {
+      ...(query.status ? { processingStatus: query.status } : {}),
+      ...idFilter,
+    },
     include: historyInclude,
     // id breaks ties so the order is stable.
     orderBy: [{ sentAt: "desc" }, { id: "desc" }],

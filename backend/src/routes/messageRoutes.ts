@@ -13,7 +13,9 @@ export function createMessageRouter(retrier: MessageRetrier, history?: MessageHi
   const router = Router();
 
   // Read-only message history: ?status=ALL|PENDING|PROCESSING|COMPLETED|FAILED
-  // (default ALL) and ?limit=1..100 (default 50).
+  // (default ALL),
+  // ?category=INCIDENT|CHANGE_REQUEST|... (resolved category) and
+  // ?limit=1..100 (default 50).
   if (history) {
     router.get("/", async (req, res) => {
       const query = historyQuerySchema.safeParse(req.query);

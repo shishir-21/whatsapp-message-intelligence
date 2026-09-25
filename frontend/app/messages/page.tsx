@@ -4,29 +4,39 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import MessageHistoryCard from "@/components/messages/MessageHistoryCard";
 import { getMessages } from "@/lib/api";
-import { STATUS_FILTERS, type HistoryMessage, type StatusFilter } from "@/lib/messageTypes";
+import StatusSidebar from "@/components/messages/StatusSidebar";
+import {
+  CATEGORY_FILTERS,
+  CATEGORY_FILTER_LABELS,
+  STATUSES,
+  STATUS_LABELS,
+  type CategoryFilter,
+  type HistoryMessage,
+  type ProcessingStatus,
+} from "@/lib/messageTypes";
 
 type LoadState = "loading" | "error" | "ready";
 
-const FILTER_LABELS: Record<StatusFilter, string> = {
-  ALL: "All",
-  PENDING: "Pending",
-  PROCESSING: "Processing",
-  COMPLETED: "Completed",
-  FAILED: "Failed",
-};
-
 export default function MessagesPage() {
-  const [filter, setFilter] = useState<StatusFilter>("ALL");
+  const [status, setStatus] = useState<ProcessingStatus>("PENDING");
+  const [category, setCategory] = useState<CategoryFilter>("ALL");
   const [messages, setMessages] = useState<HistoryMessage[]>([]);
   const [state, setState] = useState<LoadState>("loading");
-  // Bumped by Retry to re-run the fetch effect for the same filter.
+  // Bumped by Retry to re-run the fetch effect for the same filters.
   const [attempt, setAttempt] = useState(0);
 
-  function selectFilter(next: StatusFilter) {
-    if (next === filter) return;
+  // Changing the status resets the category filter to All.
+  function selectStatus(next: ProcessingStatus) {
+    if (next === status) return;
     setState("loading");
-    setFilter(next);
+    setStatus(next);
+    setCategory("ALL");
+  }
+
+  function selectCategory(next: CategoryFilter) {
+    if (next === category) return;
+    setState("loading");
+    setCategory(next);
   }
 
   function retry() {
@@ -34,7 +44,7 @@ export default function MessagesPage() {
     setAttempt((n) => n + 1);
   }
 
-  const load = useCallback(() => getMessages(filter), [filter]);
+  const load = useCallback(() => getMessages(status, category), [status, category]);
 
   useEffect(() => {
     // Ignore the response of a superseded request (fast filter switching).
@@ -54,13 +64,16 @@ export default function MessagesPage() {
   }, [load, attempt]);
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+    <div className="flex flex-1 flex-col sm:flex-row">
+      <StatusSidebar statuses={STATUSES} selected={status} onSelect={selectStatus} />
+      <main className="mx-auto w-full min-w-0 max-w-4xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/" className="text-xs text-zinc-500 hover:underline">
             ← Home
           </Link>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Message History</h1>
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{STATUS_LABELS[status]}</p>
         </div>
         <Link
           href="/reviews"
@@ -70,20 +83,20 @@ export default function MessagesPage() {
         </Link>
       </div>
 
-      <div role="group" aria-label="Filter by processing status" className="mb-5 flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((status) => (
+      <div role="group" aria-label="Filter by category" className="mb-5 flex flex-wrap gap-2">
+        {CATEGORY_FILTERS.map((option) => (
           <button
-            key={status}
+            key={option}
             type="button"
-            onClick={() => selectFilter(status)}
-            aria-pressed={filter === status}
+            onClick={() => selectCategory(option)}
+            aria-pressed={category === option}
             className={
-              filter === status
+              category === option
                 ? "rounded-full bg-emerald-700 px-3.5 py-1.5 text-sm font-medium text-white"
                 : "rounded-full border border-zinc-300 px-3.5 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
             }
           >
-            {FILTER_LABELS[status]}
+            {CATEGORY_FILTER_LABELS[option]}
           </button>
         ))}
       </div>
@@ -107,7 +120,9 @@ export default function MessagesPage() {
 
       {state === "ready" && messages.length === 0 && (
         <p className="rounded-lg border border-dashed border-zinc-300 py-12 text-center text-zinc-500 dark:border-zinc-700">
-          {filter === "ALL" ? "No messages found." : "No messages found for this filter."}
+          {category === "ALL"
+            ? `No ${STATUS_LABELS[status].toLowerCase()} messages found.`
+            : `No ${STATUS_LABELS[status].toLowerCase()} messages found for ${CATEGORY_FILTER_LABELS[category]}.`}
         </p>
       )}
 
@@ -118,6 +133,7 @@ export default function MessagesPage() {
           ))}
         </div>
       )}
-    </main>
+      </main>
+    </div>
   );
 }

@@ -52,13 +52,21 @@ function message(id: string, overrides: Record<string, unknown> = {}): MessageWi
   } as unknown as MessageWithHistory;
 }
 
+// Mirrors the repository's SQL: final result first, else the latest analysis.
+function resolvedCategory(m: MessageWithHistory): string | undefined {
+  if (m.finalResult) return m.finalResult.category;
+  const latest = [...m.analyses].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+  return latest?.category;
+}
+
 function fakeStore(messages: MessageWithHistory[]) {
-  const calls: { status?: string; limit: number }[] = [];
+  const calls: { status?: string; category?: string; limit: number }[] = [];
   const store: MessageHistoryStore = {
     findHistory: async (query) => {
       calls.push(query);
       return messages
         .filter((m) => !query.status || m.processingStatus === query.status)
+        .filter((m) => !query.category || resolvedCategory(m) === query.category)
         .slice(0, query.limit);
     },
   };
@@ -93,7 +101,7 @@ describe("GET /api/messages", () => {
     const { status, body, calls } = await get(sample, "");
     assert.equal(status, 200);
     assert.equal(body.messages.length, 3);
-    assert.deepEqual(calls[0], { status: undefined, limit: 50 });
+    assert.deepEqual(calls[0], { status: undefined, category: undefined, limit: 50 });
     assert.equal(body.messages[0].whatsappMessageId, "w-m1");
     assert.equal(body.messages[0].senderName, "Dipali");
   });
@@ -203,5 +211,69 @@ describe("GET /api/messages", () => {
     for (const leaked of ["rawOutput", "secret-model", "promptVersion", "internal boom", "lastProcessingError"]) {
       assert.ok(!text.includes(leaked), `leaked ${leaked}`);
     }
+  });
+});
+
+describe("GET /api/messages status/category filters", () => {
+  const withCat = (id: string, processingStatus: string, category: string) =>
+    message(id, { processingStatus, analyses: [analysis(`a-${id}`, T0, category)] });
+  const data = [
+    withCat("p1", "PENDING", "INCIDENT"),
+    withCat("r1", "PROCESSING", "QUESTION"),
+    withCat("c1", "COMPLETED", "INCIDENT"),
+    withCat("c2", "COMPLETED", "CHANGE_REQUEST"),
+    withCat("f1", "FAILED", "CHANGE_REQUEST"),
+    message("n1", { processingStatus: "PENDING" }),
+  ];
+  const ids = (body: { messages: { id: string }[] }) => body.messages.map((m) => m.id);
+
+  it("filters by each status", async () => {
+    assert.deepEqual(ids((await get(data, "?status=PENDING")).body), ["p1", "n1"]);
+    assert.deepEqual(ids((await get(data, "?status=PROCESSING")).body), ["r1"]);
+    assert.deepEqual(ids((await get(data, "?status=COMPLETED")).body), ["c1", "c2"]);
+    assert.deepEqual(ids((await get(data, "?status=FAILED")).body), ["f1"]);
+  });
+
+  it("filters by category", async () => {
+    assert.deepEqual(ids((await get(data, "?category=INCIDENT")).body), ["p1", "c1"]);
+    assert.deepEqual(ids((await get(data, "?category=CHANGE_REQUEST")).body), ["c2", "f1"]);
+  });
+
+  it("combines status and category", async () => {
+    const r = await get(data, "?status=COMPLETED&category=INCIDENT");
+    assert.deepEqual(ids(r.body), ["c1"]);
+    assert.deepEqual(r.calls[0], { status: "COMPLETED", category: "INCIDENT", limit: 50 });
+    assert.deepEqual(ids((await get(data, "?status=FAILED&category=CHANGE_REQUEST")).body), ["f1"]);
+    assert.deepEqual(ids((await get(data, "?status=FAILED&category=INCIDENT")).body), []);
+  });
+
+  it("rejects an invalid category with 400", async () => {
+    const { status, body, calls } = await get(data, "?category=BOGUS");
+    assert.equal(status, 400);
+    assert.equal(body.error, "Invalid query");
+    assert.equal(calls.length, 0);
+  });
+
+  it("uses FinalResult.category over the AI category", async () => {
+    const m = message("m1", {
+      analyses: [analysis("a1", T0, "INCIDENT")],
+      finalResult: { id: "f", category: "CHANGE_REQUEST", createdAt: T0, people: [] },
+    });
+    assert.deepEqual(ids((await get([m], "?category=CHANGE_REQUEST")).body), ["m1"]);
+    assert.deepEqual(ids((await get([m], "?category=INCIDENT")).body), []);
+    const body = (await get([m], "")).body;
+    assert.equal(body.messages[0].aiAnalysis.category, "INCIDENT");
+    assert.equal(body.messages[0].finalResult.category, "CHANGE_REQUEST");
+  });
+
+  it("uses the latest AI category when there is no final result", async () => {
+    const m = message("m1", {
+      analyses: [
+        analysis("a-old", new Date("2026-01-01T09:00:00Z"), "QUESTION"),
+        analysis("a-new", new Date("2026-01-01T11:00:00Z"), "INCIDENT"),
+      ],
+    });
+    assert.deepEqual(ids((await get([m], "?category=INCIDENT")).body), ["m1"]);
+    assert.deepEqual(ids((await get([m], "?category=QUESTION")).body), []);
   });
 });

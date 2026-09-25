@@ -3,8 +3,36 @@ import type { CategoryCode, PriorityCode } from "./reviewTypes";
 
 export type ProcessingStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 
-export const STATUS_FILTERS = ["ALL", "PENDING", "PROCESSING", "COMPLETED", "FAILED"] as const;
-export type StatusFilter = (typeof STATUS_FILTERS)[number];
+export const STATUSES = ["PENDING", "COMPLETED", "PROCESSING", "FAILED"] as const satisfies readonly ProcessingStatus[];
+
+export const STATUS_LABELS: Record<ProcessingStatus, string> = {
+  PENDING: "Pending",
+  COMPLETED: "Completed",
+  PROCESSING: "Processing",
+  FAILED: "Failed",
+};
+
+// Secondary filter; "ALL" means no category filter.
+export const CATEGORY_FILTERS = [
+  "ALL",
+  "ROUTINE_UPDATE",
+  "INCIDENT",
+  "CHANGE_REQUEST",
+  "RESOURCE_UPDATE",
+  "QUESTION",
+  "IRRELEVANT",
+] as const satisfies readonly ("ALL" | CategoryCode)[];
+export type CategoryFilter = (typeof CATEGORY_FILTERS)[number];
+
+export const CATEGORY_FILTER_LABELS: Record<CategoryFilter, string> = {
+  ALL: "All",
+  ROUTINE_UPDATE: "Routine Update",
+  INCIDENT: "Incident",
+  CHANGE_REQUEST: "Change Request",
+  RESOURCE_UPDATE: "Resource Update",
+  QUESTION: "Question",
+  IRRELEVANT: "Irrelevant",
+};
 
 // Fields shared by the AI analysis and the final result.
 export interface ResultFields {

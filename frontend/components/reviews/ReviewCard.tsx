@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { categoryLabel, priorityLabel, toStringList } from "@/lib/reviewForm";
+import PriorityBadge from "@/components/PriorityBadge";
+import { categoryLabel, toStringList } from "@/lib/reviewForm";
 import type { CorrectionPayload, Review } from "@/lib/reviewTypes";
 import ReviewForm from "./ReviewForm";
 
@@ -73,7 +74,7 @@ export default function ReviewCard({ review, onApprove, onCorrect }: ReviewCardP
           <Row label="Category">{categoryLabel(ai.category)}</Row>
           <Row label="Confidence">{Math.round(ai.confidence * 100)}%</Row>
           <Row label="Summary">{ai.summary ?? "—"}</Row>
-          <Row label="Priority">{priorityLabel(ai.priority)}</Row>
+          <Row label="Priority"><PriorityBadge priority={ai.priority} /></Row>
           <Row label="Action required">{ai.actionRequired ? "Yes" : "No"}</Row>
           <Row label="Requested action">{ai.requestedAction ?? "—"}</Row>
           <Row label="People">{list(ai.people)}</Row>

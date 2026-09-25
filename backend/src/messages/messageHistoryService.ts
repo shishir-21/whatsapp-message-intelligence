@@ -1,11 +1,16 @@
 import { z } from "zod";
+import type { MessageCategory } from "@prisma/client";
 import type { MessageWithHistory } from "../db/messageRepository";
+import { CATEGORY_TO_DB } from "../ai/schema";
 
 export const DEFAULT_HISTORY_LIMIT = 50;
 export const MAX_HISTORY_LIMIT = 100;
 
 export const historyQuerySchema = z.object({
   status: z.enum(["ALL", "PENDING", "PROCESSING", "COMPLETED", "FAILED"]).default("ALL"),
+  // Optional; matches the message's resolved category (final result first,
+  // otherwise the latest AI analysis).
+  category: z.enum(Object.values(CATEGORY_TO_DB) as [MessageCategory, ...MessageCategory[]]).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_HISTORY_LIMIT).default(DEFAULT_HISTORY_LIMIT),
 });
 
@@ -14,6 +19,9 @@ export type HistoryQuery = z.infer<typeof historyQuerySchema>;
 export interface MessageHistoryStore {
   findHistory(query: {
     status?: Exclude<HistoryQuery["status"], "ALL">;
+    // Resolved category: FinalResult.category if present, otherwise the
+    // latest AIAnalysis.category.
+    category?: MessageCategory;
     limit: number;
   }): Promise<MessageWithHistory[]>;
 }
@@ -23,7 +31,7 @@ export class MessageHistoryService {
 
   async list(query: HistoryQuery): Promise<MessageHistoryView[]> {
     const status = query.status === "ALL" ? undefined : query.status;
-    const messages = await this.store.findHistory({ status, limit: query.limit });
+    const messages = await this.store.findHistory({ status, category: query.category, limit: query.limit });
     return messages.map(toMessageHistoryView);
   }
 }
