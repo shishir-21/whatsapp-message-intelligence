@@ -1,0 +1,13 @@
+{
+  "name": "whatsapp-message-intelligence",
+  "private": true,
+  "description": "Convenience scripts; backend and frontend remain independent npm projects.",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "db:up": "docker compose up -d postgres",
+    "db:generate": "npm --prefix backend run prisma:generate",
+    "db:migrate": "npm --prefix backend run prisma:migrate",
+    "backend": "npm --prefix backend run dev",
+    "frontend": "npm --prefix frontend run dev"
+  }
+}

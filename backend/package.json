@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "tsx --test \"src/**/*.test.ts\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
     "postinstall": "prisma skills sync || exit 0"
   },
   "keywords": [],

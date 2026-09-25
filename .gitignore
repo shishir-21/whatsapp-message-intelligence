@@ -33,7 +33,8 @@ pnpm-debug.log*
 .wwebjs_cache/
 # WPPConnect session tokens
 tokens/
-tokens-poc/
+tokens-*/
+*-tokens/
 auth_info*/
 sessions/
 *.session.json
@@ -48,4 +49,3 @@ sessions/
 .DS_Store
 Thumbs.db
 
-backend/tokens-test*/
