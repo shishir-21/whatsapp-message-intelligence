@@ -1,3 +1,4 @@
+import type { HistoryMessage, MessagesResponse, StatusFilter } from "./messageTypes";
 import type {
   CorrectionPayload,
   Review,
@@ -54,6 +55,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function getReviews(): Promise<Review[]> {
   const data = await request<ReviewsResponse>("/api/reviews");
   return data.reviews;
+}
+
+export async function getMessages(status: StatusFilter = "ALL"): Promise<HistoryMessage[]> {
+  const data = await request<MessagesResponse>(`/api/messages?status=${encodeURIComponent(status)}`);
+  return data.messages;
 }
 
 export async function approveReview(id: string): Promise<Review> {

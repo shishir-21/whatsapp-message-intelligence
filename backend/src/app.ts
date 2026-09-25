@@ -1,5 +1,7 @@
 import express from "express";
+import * as messageRepository from "./db/messageRepository";
 import * as reviewRepository from "./db/reviewRepository";
+import { MessageHistoryService } from "./messages/messageHistoryService";
 import { ReviewService } from "./review/reviewService";
 import { createMessageRouter } from "./routes/messageRoutes";
 import { createReviewRouter } from "./routes/reviewRoutes";
@@ -35,7 +37,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/whatsapp", createWhatsAppRouter(whatsappService));
-app.use("/api/messages", createMessageRouter(processingService));
+app.use("/api/messages", createMessageRouter(processingService, new MessageHistoryService(messageRepository)));
 app.use("/api/reviews", createReviewRouter(new ReviewService(reviewRepository)));
 
 export default app;

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { Message, MessageType } from "@prisma/client";
+import type { Message, MessageType, ProcessingStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 
 export interface NewMessage {
@@ -73,5 +73,32 @@ export async function markProcessingFailed(id: string, error: string): Promise<v
   await prisma.message.update({
     where: { id },
     data: { processingStatus: "FAILED", lastProcessingError: error },
+  });
+}
+
+const historyInclude = {
+  // Only the newest analysis; older runs are kept in the database but are not
+  // part of the history list.
+  analyses: {
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    include: { review: true },
+  },
+  finalResult: true,
+} satisfies Prisma.MessageInclude;
+
+export type MessageWithHistory = Prisma.MessageGetPayload<{ include: typeof historyInclude }>;
+
+// Newest messages first. `status` undefined means every processing status.
+export function findHistory(query: {
+  status?: ProcessingStatus;
+  limit: number;
+}): Promise<MessageWithHistory[]> {
+  return prisma.message.findMany({
+    where: query.status ? { processingStatus: query.status } : undefined,
+    include: historyInclude,
+    // id breaks ties so the order is stable.
+    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+    take: query.limit,
   });
 }
