@@ -48,4 +48,4 @@ sessions/
 .DS_Store
 Thumbs.db
 
-backend/tokens-test/
+backend/tokens-test*/

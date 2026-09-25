@@ -1,4 +1,5 @@
-import { create, type Whatsapp } from "@wppconnect-team/wppconnect";
+import { create, type Message, type Whatsapp } from "@wppconnect-team/wppconnect";
+import type { IncomingMessage } from "../messages/types";
 import type { WhatsAppClientHandle, WhatsAppEventHandlers, WhatsAppGroup } from "./types";
 
 export interface WhatsAppClientConfig {
@@ -21,6 +22,41 @@ const log = (message: string) => console.log(`[whatsapp:wpp] ${message}`);
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function serializeId(id: unknown): string | undefined {
+  if (typeof id === "string") return id || undefined;
+  const serialized = (id as { _serialized?: unknown } | null | undefined)?._serialized;
+  return typeof serialized === "string" && serialized ? serialized : undefined;
+}
+
+// Maps a raw WPPConnect message to IncomingMessage. Returns null for
+// messages that should be ignored: not from a group, sent by this account,
+// or missing the identifiers we need.
+function normalizeMessage(raw: Message): IncomingMessage | null {
+  if (!raw.isGroupMsg || raw.fromMe) return null;
+
+  const whatsappMessageId = serializeId(raw.id);
+  const whatsappGroupId = serializeId(raw.chatId) ?? serializeId(raw.from);
+  // In group chats "author" is the sending participant; "from" is the group.
+  const senderId = serializeId(raw.author) ?? serializeId(raw.sender?.id);
+  if (!whatsappMessageId || !whatsappGroupId || !senderId) return null;
+
+  const type = String(raw.type);
+  const messageType = type === "chat" ? "text" : type === "image" ? "image" : "other";
+  // Images carry their caption in `caption`; `body` is the media payload.
+  const text = messageType === "text" ? raw.body : messageType === "image" ? raw.caption : undefined;
+  const seconds = raw.t ?? raw.timestamp;
+
+  return {
+    whatsappMessageId,
+    whatsappGroupId,
+    senderId,
+    senderName: raw.notifyName || raw.sender?.pushname || raw.sender?.name || undefined,
+    timestamp: typeof seconds === "number" ? new Date(seconds * 1000) : new Date(),
+    messageType,
+    text: text || undefined,
+  };
 }
 
 // Builds a WPPConnect client and translates its lifecycle callbacks into the
@@ -137,6 +173,15 @@ export function createWhatsAppClient(
           return;
         }
         wpp = client;
+        client.onMessage((raw) => {
+          if (destroyed || ended) return;
+          try {
+            const message = normalizeMessage(raw);
+            if (message) handlers.onMessage(message);
+          } catch (err) {
+            log(`failed to process incoming message: ${errorMessage(err)}`);
+          }
+        });
         // create() only resolves once logged in.
         markReady();
       } catch (err) {

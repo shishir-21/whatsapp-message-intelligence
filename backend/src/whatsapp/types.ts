@@ -1,3 +1,5 @@
+import type { IncomingMessage } from "../messages/types";
+
 export const WhatsAppStatus = {
   DISCONNECTED: "DISCONNECTED",
   INITIALIZING: "INITIALIZING",
@@ -23,6 +25,8 @@ export interface WhatsAppEventHandlers {
   onAuthFailure(message: string): void;
   onReady(): void;
   onDisconnected(reason: string): void;
+  // A normalized message from a group chat, sent by someone else.
+  onMessage(message: IncomingMessage): void;
 }
 
 // The only group information the rest of the application sees.

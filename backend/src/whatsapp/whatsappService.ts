@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { Group } from "@prisma/client";
 import { getSelectedGroup, selectGroup } from "../db/groupRepository";
+import type { IncomingMessage } from "../messages/types";
 import {
   WhatsAppStatus,
   type WhatsAppClientFactory,
@@ -44,7 +45,10 @@ export class WhatsAppService extends EventEmitter {
     updatedAt: new Date(),
   };
 
-  constructor(private readonly createClient: WhatsAppClientFactory) {
+  constructor(
+    private readonly createClient: WhatsAppClientFactory,
+    private readonly onMessage: (message: IncomingMessage) => void = () => undefined,
+  ) {
     super();
   }
 
@@ -93,6 +97,14 @@ export class WhatsAppService extends EventEmitter {
         this.qr = null;
         this.setState(WhatsAppStatus.READY, null);
         log("Client ready");
+      },
+      onMessage: (message) => {
+        if (!isCurrent() || this.state.status !== WhatsAppStatus.READY) return;
+        try {
+          this.onMessage(message);
+        } catch (err) {
+          log(`Message handler failed: ${errorMessage(err)}`);
+        }
       },
       onDisconnected: (reason) => {
         if (!isCurrent()) return;
