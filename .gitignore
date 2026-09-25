@@ -31,6 +31,9 @@ pnpm-debug.log*
 # WhatsApp Web session / authentication data
 .wwebjs_auth/
 .wwebjs_cache/
+# WPPConnect session tokens
+tokens/
+tokens-poc/
 auth_info*/
 sessions/
 *.session.json
