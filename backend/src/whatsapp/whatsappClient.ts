@@ -1,5 +1,5 @@
 import { create, type Whatsapp } from "@wppconnect-team/wppconnect";
-import type { WhatsAppClientHandle, WhatsAppEventHandlers } from "./types";
+import type { WhatsAppClientHandle, WhatsAppEventHandlers, WhatsAppGroup } from "./types";
 
 export interface WhatsAppClientConfig {
   // WPPConnect session name.
@@ -166,6 +166,16 @@ export function createWhatsAppClient(
     async logout() {
       if (!wpp) return;
       await wpp.logout();
+    },
+
+    // Fetches the account's groups live from WhatsApp Web.
+    async listGroups(): Promise<WhatsAppGroup[]> {
+      if (!wpp) throw new Error("WhatsApp client is not connected");
+      const chats = await wpp.listChats({ onlyGroups: true });
+      return chats.map((chat) => {
+        const id = chat.id._serialized;
+        return { id, name: chat.name || id };
+      });
     },
   };
 }

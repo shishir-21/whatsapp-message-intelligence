@@ -25,11 +25,18 @@ export interface WhatsAppEventHandlers {
   onDisconnected(reason: string): void;
 }
 
+// The only group information the rest of the application sees.
+export interface WhatsAppGroup {
+  id: string;
+  name: string;
+}
+
 // The subset of the WPPConnect client that createWhatsAppClient exposes.
 export interface WhatsAppClientHandle {
   initialize(): Promise<void>;
   destroy(): Promise<void>;
   logout(): Promise<void>;
+  listGroups(): Promise<WhatsAppGroup[]>;
 }
 
 export type WhatsAppClientFactory = (handlers: WhatsAppEventHandlers) => WhatsAppClientHandle;

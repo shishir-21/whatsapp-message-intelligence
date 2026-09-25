@@ -1,8 +1,11 @@
 import { EventEmitter } from "node:events";
+import type { Group } from "@prisma/client";
+import { getSelectedGroup, selectGroup } from "../db/groupRepository";
 import {
   WhatsAppStatus,
   type WhatsAppClientFactory,
   type WhatsAppClientHandle,
+  type WhatsAppGroup,
   type WhatsAppState,
 } from "./types";
 
@@ -10,6 +13,20 @@ const log = (message: string) => console.log(`[whatsapp] ${message}`);
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+export class WhatsAppNotReadyError extends Error {
+  constructor() {
+    super("WhatsApp client is not ready");
+    this.name = "WhatsAppNotReadyError";
+  }
+}
+
+export class GroupNotFoundError extends Error {
+  constructor(groupId: string) {
+    super(`Group ${groupId} was not found in the connected WhatsApp account`);
+    this.name = "GroupNotFoundError";
+  }
 }
 
 // Owns the single WhatsApp client and turns its events into simple state.
@@ -96,6 +113,28 @@ export class WhatsAppService extends EventEmitter {
       log(`Initialization failed: ${errorMessage(err)}`);
       await this.discardClient();
     }
+  }
+
+  // Fetches the groups of the connected account. Throws
+  // WhatsAppNotReadyError unless the client is READY.
+  async listGroups(): Promise<WhatsAppGroup[]> {
+    if (this.state.status !== WhatsAppStatus.READY || !this.client) {
+      throw new WhatsAppNotReadyError();
+    }
+    return this.client.listGroups();
+  }
+
+  // Verifies the group exists in the connected account, then makes it the
+  // only selected group.
+  async selectGroup(groupId: string): Promise<Group> {
+    const groups = await this.listGroups();
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) throw new GroupNotFoundError(groupId);
+    return selectGroup(group.id, group.name);
+  }
+
+  getSelectedGroup(): Promise<Group | null> {
+    return getSelectedGroup();
   }
 
   // Unlinks the device and deletes the local session; a new QR scan is
