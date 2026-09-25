@@ -83,19 +83,24 @@ npm run frontend    # terminal 2 -> http://localhost:3000
 | `GROQ_API_KEY` | yes | Your own Groq API key |
 | `GROQ_MODEL` | yes | Groq chat model id (default `llama-3.3-70b-versatile`) |
 | `AI_REVIEW_CONFIDENCE_THRESHOLD` | yes | 0-1; below this confidence a message is held for review |
-| `WHATSAPP_SESSION_PATH` | no | Local session directory, default `./tokens` (relative to `backend/`), created automatically |
-| `WHATSAPP_CLIENT_ID` | no | WPPConnect session name |
-| `WHATSAPP_HEADLESS` | no | `true` (default, recommended). Set `false` only for debugging |
-| `PORT` | no | Backend port, default 5000 |
-| `NODE_ENV` | no | `development` prints the QR in the backend terminal |
+
 
 `frontend/.env.local` (template: `frontend/.env.example`): `NEXT_PUBLIC_API_URL=http://localhost:5000` (backend base URL, no `/api`). The backend allows CORS only from `http://localhost:3000`, so open the frontend on that exact origin.
 
 ## Tests and checks
-
+Backend
 ```powershell
-cd backend;  npm test; npm run build
-cd ../frontend; npx tsc --noEmit; npm run lint; npm run build
+cd backend  
+npm test 
+npm run build
+```
+
+Frontend
+```powershell
+cd ../frontend 
+npx tsc --noEmit
+npm run lint
+npm run build
 ```
 
 ## Security notes
