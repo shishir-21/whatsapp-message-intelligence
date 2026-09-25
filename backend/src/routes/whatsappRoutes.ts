@@ -19,8 +19,23 @@ function sendError(res: Response, err: unknown): void {
 export function createWhatsAppRouter(service: WhatsAppService): Router {
   const router = Router();
 
+  // lastError can contain WPPConnect/Puppeteer internals, so the API only
+  // reports whether one exists.
+  const publicStatus = () => {
+    const { status, lastError, updatedAt } = service.getStatus();
+    return { status, hasError: lastError !== null, updatedAt };
+  };
+
   router.get("/status", (_req, res) => {
-    res.json(service.getStatus());
+    res.set("Cache-Control", "no-store");
+    res.json(publicStatus());
+  });
+
+  // Starts (or reconnects) the client in the background. Idempotent: does
+  // nothing if a client already exists. The QR is then served by GET /qr.
+  router.post("/connect", (_req, res) => {
+    void service.initialize();
+    res.status(202).json(publicStatus());
   });
 
   router.get("/qr", (_req, res) => {

@@ -1,3 +1,4 @@
+import type { SelectedGroup, WhatsAppGroup, WhatsAppStatusResponse } from "./whatsappTypes";
 import type { CategoryFilter, HistoryMessage, MessagesResponse, ProcessingStatus } from "./messageTypes";
 import type {
   CorrectionPayload,
@@ -81,4 +82,42 @@ export async function correctReview(id: string, payload: CorrectionPayload): Pro
     body: JSON.stringify(payload),
   });
   return data.review;
+}
+
+export function getWhatsAppStatus(): Promise<WhatsAppStatusResponse> {
+  return request<WhatsAppStatusResponse>("/api/whatsapp/status");
+}
+
+export async function getWhatsAppQr(): Promise<string | null> {
+  const data = await request<{ qr: string | null }>("/api/whatsapp/qr");
+  return data.qr;
+}
+
+export function connectWhatsApp(): Promise<WhatsAppStatusResponse> {
+  return request<WhatsAppStatusResponse>("/api/whatsapp/connect", { method: "POST" });
+}
+
+export async function getWhatsAppGroups(): Promise<WhatsAppGroup[]> {
+  const data = await request<{ groups: WhatsAppGroup[] }>("/api/whatsapp/groups");
+  return data.groups;
+}
+
+// The backend answers 404 when no group has been selected yet.
+export async function getSelectedGroup(): Promise<SelectedGroup | null> {
+  try {
+    const data = await request<{ group: SelectedGroup }>("/api/whatsapp/groups/selected");
+    return data.group;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function selectWhatsAppGroup(groupId: string): Promise<SelectedGroup> {
+  const data = await request<{ group: SelectedGroup }>("/api/whatsapp/groups/select", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ groupId }),
+  });
+  return data.group;
 }
