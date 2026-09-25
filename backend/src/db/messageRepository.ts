@@ -30,3 +30,31 @@ export function create(message: NewMessage): Promise<Message> {
 export function isDuplicateMessageError(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
 }
+
+export type MessageWithGroup = Message & { group: { name: string } };
+
+export function findForProcessing(id: string): Promise<MessageWithGroup | null> {
+  return prisma.message.findUnique({ where: { id }, include: { group: { select: { name: true } } } });
+}
+
+// Atomically moves a PENDING message to PROCESSING and counts the attempt.
+// Returns false if another caller already claimed it (or it is not PENDING),
+// which keeps a message from being processed twice.
+export async function claimForProcessing(id: string): Promise<boolean> {
+  const { count } = await prisma.message.updateMany({
+    where: { id, processingStatus: "PENDING" },
+    data: {
+      processingStatus: "PROCESSING",
+      processingAttempts: { increment: 1 },
+      lastAttemptAt: new Date(),
+    },
+  });
+  return count === 1;
+}
+
+export async function markProcessingFailed(id: string, error: string): Promise<void> {
+  await prisma.message.update({
+    where: { id },
+    data: { processingStatus: "FAILED", lastProcessingError: error },
+  });
+}

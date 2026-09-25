@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "postinstall": "prisma skills sync || exit 0"
   },
   "keywords": [],
@@ -21,8 +22,10 @@
     "@wppconnect/wa-version": "^1.5.4472",
     "dotenv": "^18.0.3",
     "express": "^5.2.1",
+    "groq-sdk": "^0.37.0",
     "puppeteer": "^24.43.1",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
