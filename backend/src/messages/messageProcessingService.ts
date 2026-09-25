@@ -3,13 +3,15 @@ import { CATEGORY_TO_DB, PRIORITY_TO_DB, parseAIAnalysis } from "../ai/schema";
 import { PROMPT_VERSION } from "../ai/prompt";
 import type { NewAIAnalysis } from "../db/aiAnalysisRepository";
 import type { MessageWithGroup } from "../db/messageRepository";
+import { decideReview } from "../review/reviewDecision";
+import type { ReviewDecision } from "../review/reviewDecision";
 
 // Persistence operations the processor needs; the real implementation lives
 // in the db repositories, tests substitute an in-memory one.
 export interface ProcessingStore {
   findForProcessing(id: string): Promise<MessageWithGroup | null>;
   claimForProcessing(id: string): Promise<boolean>;
-  saveAnalysisAndComplete(analysis: NewAIAnalysis): Promise<unknown>;
+  saveAnalysisAndComplete(analysis: NewAIAnalysis, decision: ReviewDecision): Promise<unknown>;
   markProcessingFailed(id: string, error: string): Promise<void>;
 }
 
@@ -38,6 +40,7 @@ export class MessageProcessingService implements MessageProcessor {
   constructor(
     private readonly provider: AIProvider,
     private readonly store: ProcessingStore,
+    private readonly reviewConfidenceThreshold: number,
   ) {}
 
   // Processes one stored message: PENDING -> PROCESSING -> COMPLETED, or
@@ -64,7 +67,7 @@ export class MessageProcessingService implements MessageProcessor {
       });
       const result = parseAIAnalysis(response.content);
 
-      await this.store.saveAnalysisAndComplete({
+      const analysis: NewAIAnalysis = {
         messageId,
         category: CATEGORY_TO_DB[result.category],
         confidence: result.confidence,
@@ -78,8 +81,10 @@ export class MessageProcessingService implements MessageProcessor {
         rawOutput: result,
         model: response.model,
         promptVersion: PROMPT_VERSION,
-      });
-      log(`completed ${messageId}`);
+      };
+      const decision = decideReview(analysis, this.reviewConfidenceThreshold);
+      await this.store.saveAnalysisAndComplete(analysis, decision);
+      log(`completed ${messageId} (${decision.requiresReview ? "needs review" : "auto-accepted"})`);
     } catch (err) {
       const reason = errorMessage(err);
       log(`failed ${messageId}: ${reason}`);

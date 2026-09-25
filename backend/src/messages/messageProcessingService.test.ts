@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import type { AIProvider } from "../ai/types";
 import type { NewAIAnalysis } from "../db/aiAnalysisRepository";
 import type { MessageWithGroup } from "../db/messageRepository";
+import type { ReviewDecision } from "../review/reviewDecision";
 import { MessageProcessingService, type ProcessingStore } from "./messageProcessingService";
+
+const THRESHOLD = 0.8;
 
 const message = (content: string): MessageWithGroup => ({
   id: "m1",
@@ -25,14 +28,18 @@ const message = (content: string): MessageWithGroup => ({
 
 function fakeStore(msg: MessageWithGroup | null, claim = true) {
   const saved: NewAIAnalysis[] = [];
+  const decisions: ReviewDecision[] = [];
   const failures: string[] = [];
   const store: ProcessingStore = {
     findForProcessing: async () => msg,
     claimForProcessing: async () => claim,
-    saveAnalysisAndComplete: async (analysis) => void saved.push(analysis),
+    saveAnalysisAndComplete: async (analysis, decision) => {
+      saved.push(analysis);
+      decisions.push(decision);
+    },
     markProcessingFailed: async (_id, error) => void failures.push(error),
   };
-  return { store, saved, failures };
+  return { store, saved, decisions, failures };
 }
 
 const goodOutput = JSON.stringify({
@@ -54,12 +61,27 @@ const providerReturning = (content: string): AIProvider => ({
 describe("MessageProcessingService", () => {
   it("saves a validated analysis on success", async () => {
     const { store, saved, failures } = fakeStore(message("Can we meet tomorrow?"));
-    await new MessageProcessingService(providerReturning(goodOutput), store).process("m1");
+    await new MessageProcessingService(providerReturning(goodOutput), store, THRESHOLD).process("m1");
     assert.equal(failures.length, 0);
     assert.equal(saved.length, 1);
     assert.equal(saved[0].category, "QUESTION");
     assert.equal(saved[0].model, "test-model");
     assert.ok(saved[0].deadline instanceof Date);
+  });
+
+  it("passes a no-review decision for a confident, routine result", async () => {
+    const { store, decisions } = fakeStore(message("Can we meet tomorrow?"));
+    await new MessageProcessingService(providerReturning(goodOutput), store, THRESHOLD).process("m1");
+    assert.deepEqual(decisions, [{ requiresReview: false }]);
+  });
+
+  it("passes a review decision for an incident and still saves the analysis", async () => {
+    const { store, saved, decisions, failures } = fakeStore(message("Server is down"));
+    const incident = JSON.stringify({ ...JSON.parse(goodOutput), category: "Incident" });
+    await new MessageProcessingService(providerReturning(incident), store, THRESHOLD).process("m1");
+    assert.equal(failures.length, 0);
+    assert.equal(saved.length, 1);
+    assert.equal(decisions[0].requiresReview, true);
   });
 
   it("marks the message FAILED when the provider throws", async () => {
@@ -69,14 +91,14 @@ describe("MessageProcessingService", () => {
         throw new Error("Groq down");
       },
     };
-    await new MessageProcessingService(provider, store).process("m1");
+    await new MessageProcessingService(provider, store, THRESHOLD).process("m1");
     assert.equal(saved.length, 0);
     assert.deepEqual(failures, ["Groq down"]);
   });
 
   it("marks FAILED and creates no analysis on malformed output", async () => {
     const { store, saved, failures } = fakeStore(message("hello"));
-    await new MessageProcessingService(providerReturning("not json"), store).process("m1");
+    await new MessageProcessingService(providerReturning("not json"), store, THRESHOLD).process("m1");
     assert.equal(saved.length, 0);
     assert.equal(failures.length, 1);
   });
@@ -90,7 +112,7 @@ describe("MessageProcessingService", () => {
         return { model: "m", content: goodOutput };
       },
     };
-    await new MessageProcessingService(provider, store).process("m1");
+    await new MessageProcessingService(provider, store, THRESHOLD).process("m1");
     assert.equal(called, false);
     assert.equal(saved.length, 0);
     assert.equal(failures.length, 1);
@@ -98,7 +120,7 @@ describe("MessageProcessingService", () => {
 
   it("does nothing when the message was already claimed", async () => {
     const { store, saved, failures } = fakeStore(message("hi"), false);
-    await new MessageProcessingService(providerReturning(goodOutput), store).process("m1");
+    await new MessageProcessingService(providerReturning(goodOutput), store, THRESHOLD).process("m1");
     assert.equal(saved.length + failures.length, 0);
   });
 });
