@@ -1,6 +1,11 @@
 import { GroqProvider } from "../ai/groqProvider";
 import { saveAnalysisAndComplete } from "../db/aiAnalysisRepository";
-import { claimForProcessing, findForProcessing, markProcessingFailed } from "../db/messageRepository";
+import {
+  claimForProcessing,
+  claimForRetry,
+  findForProcessing,
+  markProcessingFailed,
+} from "../db/messageRepository";
 import { MessageProcessingService } from "../messages/messageProcessingService";
 import { loadReviewConfig } from "../review/reviewConfig";
 import { MessageService } from "../messages/messageService";
@@ -12,11 +17,12 @@ const config = loadWhatsAppClientConfig();
 // Throws at startup if AI_REVIEW_CONFIDENCE_THRESHOLD is missing or invalid.
 const reviewConfig = loadReviewConfig();
 
-const processingService = new MessageProcessingService(
+export const processingService = new MessageProcessingService(
   new GroqProvider(),
   {
     findForProcessing,
     claimForProcessing,
+    claimForRetry,
     saveAnalysisAndComplete,
     markProcessingFailed,
   },

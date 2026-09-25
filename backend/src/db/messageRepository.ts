@@ -52,6 +52,23 @@ export async function claimForProcessing(id: string): Promise<boolean> {
   return count === 1;
 }
 
+// Atomically moves a FAILED message that still has attempts left back to
+// PROCESSING and counts the attempt. The status/attempts guard makes it a
+// compare-and-set: of concurrent retries exactly one gets true. The attempt
+// counter is not reset and lastProcessingError is left for the new attempt
+// to overwrite.
+export async function claimForRetry(id: string, maxAttempts: number): Promise<boolean> {
+  const { count } = await prisma.message.updateMany({
+    where: { id, processingStatus: "FAILED", processingAttempts: { lt: maxAttempts } },
+    data: {
+      processingStatus: "PROCESSING",
+      processingAttempts: { increment: 1 },
+      lastAttemptAt: new Date(),
+    },
+  });
+  return count === 1;
+}
+
 export async function markProcessingFailed(id: string, error: string): Promise<void> {
   await prisma.message.update({
     where: { id },

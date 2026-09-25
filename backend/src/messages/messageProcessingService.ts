@@ -11,6 +11,9 @@ import type { ReviewDecision } from "../review/reviewDecision";
 export interface ProcessingStore {
   findForProcessing(id: string): Promise<MessageWithGroup | null>;
   claimForProcessing(id: string): Promise<boolean>;
+  // Atomically moves a FAILED message with fewer than maxAttempts attempts
+  // back to PROCESSING, counting the attempt. False if it no longer qualifies.
+  claimForRetry(id: string, maxAttempts: number): Promise<boolean>;
   saveAnalysisAndComplete(analysis: NewAIAnalysis, decision: ReviewDecision): Promise<unknown>;
   markProcessingFailed(id: string, error: string): Promise<void>;
 }
@@ -18,6 +21,35 @@ export interface ProcessingStore {
 // What MessageService depends on; it knows nothing about AI providers.
 export interface MessageProcessor {
   process(messageId: string): Promise<void>;
+}
+
+export const MAX_PROCESSING_ATTEMPTS = 3;
+
+export class MessageNotFoundError extends Error {
+  constructor() {
+    super("Message not found");
+    this.name = "MessageNotFoundError";
+  }
+}
+
+export class MessageRetryConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MessageRetryConflictError";
+  }
+}
+
+// Returned once a retry has been claimed. `completion` settles when the
+// background processing finishes; it never rejects.
+export interface RetryAccepted {
+  messageId: string;
+  processingAttempts: number;
+  completion: Promise<void>;
+}
+
+// What the retry route depends on.
+export interface MessageRetrier {
+  retry(messageId: string): Promise<RetryAccepted>;
 }
 
 const log = (message: string) => console.log(`[ai] ${message}`);
@@ -49,7 +81,43 @@ export class MessageProcessingService implements MessageProcessor {
     let claimed = false;
     try {
       claimed = await this.store.claimForProcessing(messageId);
-      if (!claimed) return;
+    } catch (err) {
+      log(`failed ${messageId}: ${errorMessage(err)}`);
+      return;
+    }
+    if (claimed) await this.run(messageId);
+  }
+
+  // Manual retry of a FAILED message. Rejects with MessageNotFoundError or
+  // MessageRetryConflictError; otherwise claims the message (atomically, so
+  // concurrent retries cannot both win) and runs the normal pipeline in the
+  // background. The attempt counter is never reset and the previous error is
+  // kept until the new attempt records its own outcome.
+  async retry(messageId: string): Promise<RetryAccepted> {
+    const message = await this.store.findForProcessing(messageId);
+    if (!message) throw new MessageNotFoundError();
+    if (message.processingStatus !== "FAILED") {
+      throw new MessageRetryConflictError("Only FAILED messages can be retried");
+    }
+    if (message.processingAttempts >= MAX_PROCESSING_ATTEMPTS) {
+      throw new MessageRetryConflictError(
+        `Maximum processing attempts (${MAX_PROCESSING_ATTEMPTS}) reached`,
+      );
+    }
+    if (!(await this.store.claimForRetry(messageId, MAX_PROCESSING_ATTEMPTS))) {
+      throw new MessageRetryConflictError("Message is no longer eligible for retry");
+    }
+    return {
+      messageId,
+      processingAttempts: message.processingAttempts + 1,
+      completion: this.run(messageId),
+    };
+  }
+
+  // Runs the pipeline for a message this caller has already claimed. Never
+  // rejects: any error marks the message FAILED.
+  private async run(messageId: string): Promise<void> {
+    try {
       log(`processing ${messageId}`);
 
       const message = await this.store.findForProcessing(messageId);
@@ -88,7 +156,6 @@ export class MessageProcessingService implements MessageProcessor {
     } catch (err) {
       const reason = errorMessage(err);
       log(`failed ${messageId}: ${reason}`);
-      if (!claimed) return;
       try {
         await this.store.markProcessingFailed(messageId, reason);
       } catch (markErr) {

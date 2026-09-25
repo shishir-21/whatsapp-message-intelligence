@@ -33,6 +33,7 @@ function fakeStore(msg: MessageWithGroup | null, claim = true) {
   const store: ProcessingStore = {
     findForProcessing: async () => msg,
     claimForProcessing: async () => claim,
+    claimForRetry: async () => claim,
     saveAnalysisAndComplete: async (analysis, decision) => {
       saved.push(analysis);
       decisions.push(decision);
