@@ -81,7 +81,7 @@ npm run frontend    # terminal 2 -> http://localhost:3000
 |----------|----------|-------------|
 | `DATABASE_URL` | yes | Default matches `docker-compose.yml` (`whatsapp_user` / `whatsapp_password`, db `whatsapp_intelligence`, port 5435) |
 | `GROQ_API_KEY` | yes | Your own Groq API key |
-| `GROQ_MODEL` | yes | Groq chat model id (default `llama-3.3-70b-versatile`) |
+| `GROQ_MODEL` | yes | Groq chat model id (`openai/gpt-oss-20b`) |
 | `AI_REVIEW_CONFIDENCE_THRESHOLD` | yes | 0-1; below this confidence a message is held for review |
 
 
