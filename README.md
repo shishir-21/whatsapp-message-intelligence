@@ -12,6 +12,22 @@ Monitors one selected WhatsApp group, classifies each incoming message with AI (
 
 WPPConnect drives a headless Chromium running WhatsApp Web; the backend receives group messages, stores them, sends text to Groq for classification, and routes low-confidence / HIGH priority / INCIDENT results to the review queue.
 
+
+## Demo Videos
+
+### Frontend Flow
+This video demonstrates the complete user-facing flow:
+**Connect WhatsApp → Scan QR → Select Group → Receive Messages → AI Result → Review → Approve/Correct → Message History → Change Group → Logout**
+
+[Watch Frontend Flow Video](https://www.loom.com/share/dcd4183a42dc4387a4181489b1b463d1)
+
+### Backend Architecture and Code Flow
+This video explains the backend architecture and the main code flow, including:
+**WPPConnect → Message Processing → PostgreSQL → AI/Groq → Zod Validation → Review → Final Result → REST API → Frontend**
+
+[Watch Architecture Flow Video](https://www.loom.com/share/0091b53a910842918005febd37a81beb)
+
+
 ## Features
 
 - Connect WhatsApp from the UI by scanning a QR code
